@@ -9,15 +9,22 @@ public class TestMain {
     private static int sharedCounter = 0;
     private static final Object counterLock = new Object();
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         System.out.println("--- STARTING LOGIC TESTS ---\n");
-
         testPriorityLogic();
-
         // Wait a moment before starting the second test to keep console output clean
-        try { Thread.sleep(3000); } catch (InterruptedException e) {}
 
+        try { Thread.sleep(3000); } catch (InterruptedException e) {}
+        System.out.println("------------------------------------");
         testSynchronizationLogic();
+
+        try { Thread.sleep(3000); } catch (InterruptedException e) {}
+        System.out.println("------------------------------------");
+        testDirectSetPriority(); // בדיקה 1: שינוי ישיר (ייכשל בסידור מחדש)
+
+        try { Thread.sleep(3000); } catch (InterruptedException e) {}
+        System.out.println("------------------------------------");
+        testUpdateTaskPriority(); // בדיקה 2: שינוי דרך ה-Pool (יצליח בסידור מחדש)
     }
 
     /**
@@ -99,5 +106,72 @@ public class TestMain {
         } else {
             System.out.println("RESULT: FAILED! Threads overwrote each other. Check your synchronized blocks.");
         }
+    }
+
+    private static void testDirectSetPriority() throws InterruptedException {
+        System.out.println("TEST 1: Direct task.setPriority() (Should NOT re-sort)");
+        ThreadsPool pool = new ThreadsPool(1); // חוט אחד בלבד
+
+        // 1. חוסמים את התור
+        Task blocker = createStaticTask(999, "BLOCKER",2000);
+        pool.submit(blocker);
+
+        // 2. מכניסים שתי משימות: A (עדיפות נמוכה), B (עדיפות בינונית)
+        Task taskA = createStaticTask(1, "Task A",0);
+        Task taskB = createStaticTask(10, "Task B", 0);
+
+        pool.submit(taskA);
+        pool.submit(taskB);
+
+        // 3. משנים את העדיפות של A ישירות ל-100 (גבוה מ-B)
+        System.out.println("[Test] Manually changing Task A priority to 100 via setPriority...");
+        taskA.setPriority(100);
+
+        // 4. משחררים את החסימה (הדמיה ע"י המתנה קצרה)
+        Thread.sleep(1000);
+        System.out.println("[Test] Expecting Task B to run BEFORE Task A (because queue didn't re-sort):");
+    }
+
+    /**
+     * בדיקה 2: מראה ששינוי דרך ה-Pool מעדכן את התור בהצלחה.
+     */
+    private static void testUpdateTaskPriority() throws InterruptedException {
+        System.out.println("TEST 2: pool.updateTaskPriority() (Should SUCCESSFULY re-sort)");
+        ThreadsPool pool = new ThreadsPool(1);
+
+        // 1. חוסמים את התור
+        pool.submit(createStaticTask(999, "BLOCKER", 2000));
+
+        // 2. מכניסים שתי משימות: C (נמוכה), D (בינונית)
+        Task taskC = createStaticTask(1, "Task C", 0);
+        Task taskD = createStaticTask(10, "Task D", 0);
+
+        pool.submit(taskC);
+        pool.submit(taskD);
+
+        // 3. משנים את העדיפות של C ל-100 דרך ה-Pool
+        System.out.println("[Test] Updating Task C priority to 100 via pool.updateTaskPriority...");
+        pool.updateTaskPriority(taskC, 100);
+
+        // 4. משחררים חסימה
+        Thread.sleep(1000);
+        System.out.println("[Test] Expecting Task C to run BEFORE Task D (because queue RE-SORTED):");
+    }
+
+    // פונקציית עזר ליצירת משימות פשוטות להדפסה
+    private static Task createStaticTask(int initialPriority, String name, int sleepTime) {
+        return new Task() {
+            private int p = initialPriority;
+            @Override
+            public void perform() {
+                System.out.println(">>> Start Executing: " + name);
+                if (sleepTime > 0) {
+                    try { Thread.sleep(sleepTime); } catch (InterruptedException e) {}
+                }
+                System.out.println(">>> Finished: " + name + " (Priority: " + p + ")");
+            }
+            @Override public void setPriority(int level) { this.p = level; }
+            @Override public int getPriority() { return p; }
+        };
     }
 }
