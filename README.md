@@ -7,7 +7,7 @@ Small educational Java library that runs **`Task`** instances on a fixed pool of
 ```mermaid
 flowchart TB
     subgraph clients["Clients"]
-        TMain["TestMain / TestPool"]
+        TMain["TestPool / TestMain / EdgeCaseTests"]
     end
 
     subgraph pool["ThreadsPool"]
@@ -67,7 +67,10 @@ flowchart LR
 | `src/il/ac/hit/xpool/ThreadsPool.java` | Queue, workers, `submit`, `updateTaskPriority` |
 | `src/SimpleTask.java` | Simple `Task` implementation (default package) |
 | `src/TestPool.java` | Short demo `main` |
-| `src/il/ac/hit/tests/TestMain.java` | Priority, sync, and API comparison tests |
+| `src/il/ac/hit/tests/TestMain.java` | Priority, sync, and `updateTaskPriority` behavior |
+| `src/il/ac/hit/tests/EdgeCaseTests.java` | Extra edge-case / stress checks (`Error` vs `Exception`, null, burst load, …) |
+
+**Demos vs tests:** small `main` demos like `TestPool` live in the default package next to `SimpleTask`. Assertion-style checks are under `il.ac.hit.tests` and exit with a status code.
 
 ## Requirements
 
@@ -85,6 +88,8 @@ mkdir -p out
 javac -d out $(find src -name "*.java")
 
 java -cp out il.ac.hit.tests.TestMain
+# or
+java -cp out il.ac.hit.tests.EdgeCaseTests
 # or
 java -cp out TestPool
 ```
