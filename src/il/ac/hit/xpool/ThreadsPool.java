@@ -1,7 +1,6 @@
 package il.ac.hit.xpool;
 
 import java.util.PriorityQueue;
-import java.util.Comparator;
 
 public class ThreadsPool {
     // 1. הגדרת המשתנים כ-Fields של המחלקה
