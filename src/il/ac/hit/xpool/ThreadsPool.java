@@ -2,58 +2,98 @@ package il.ac.hit.xpool;
 
 import java.util.PriorityQueue;
 
+/**
+ * Manages a pool of worker threads that execute tasks based on priority.
+ */
 public class ThreadsPool {
-    // 1. הגדרת המשתנים כ-Fields של המחלקה
+
+    /**
+     * The priority queue storing the tasks pending execution.
+     */
     private final PriorityQueue<Task> taskQueue;
+
+    /**
+     * The array of active worker threads.
+     */
     private final Thread[] workers;
 
+    /**
+     * Initializes the threads pool with the specified number of worker threads.
+     * * @param numberOfThreads the number of threads to spawn
+     * @throws IllegalArgumentException if numberOfThreads is 0 or negative
+     */
     public ThreadsPool(int numberOfThreads) {
-        // 2. אתחול התור בתוך הקונסטרקטור
-        // validation check, number of threads greater than 0
         if (numberOfThreads <= 0) {
             throw new IllegalArgumentException("Number of threads must be greater than 0. Received: " + numberOfThreads);
         }
-        //compare(t2, t1) to make sure bigger priority number is taken first - in PriorityQueue its smallest first.
+
+        /*
+         * Compare t2 to t1 to ensure the task with the larger priority number
+         * is taken first, as PriorityQueue defaults to smallest first.
+         */
         this.taskQueue = new PriorityQueue<>((t1, t2) ->
                 Integer.compare(t2.getPriority(), t1.getPriority())
         );
 
-        // 3. יצירת מערך החוטים
         this.workers = new Thread[numberOfThreads];
-
         for (int i = 0; i < numberOfThreads; i++) {
-            workers[i] = new Worker(); // יצירת החוט (המחלקה הפנימית)
-            workers[i].start();        // הפעלה שלו
+            workers[i] = new Worker();
+            workers[i].start();
         }
     }
 
+    /**
+     * Submits a new task to the pool for execution.
+     * * @param task the task to be executed
+     * @throws IllegalArgumentException if the task is null
+     */
     public void submit(Task task) {
+        if (task == null) {
+            throw new IllegalArgumentException("Task cannot be null");
+        }
+
         synchronized (taskQueue) {
             taskQueue.add(task);
-            // מעירים חוט אחד שממתין ב-wait()
             taskQueue.notify();
         }
     }
+
+    /**
+     * Updates the priority of a task currently in the pool.
+     * * @param task the task to update
+     * @param newLevel the new priority level
+     * @throws IllegalArgumentException if the task is null
+     */
     public void updateTaskPriority(Task task, int newLevel) {
+        if (task == null) {
+            throw new IllegalArgumentException("Task cannot be null");
+        }
+
         synchronized (taskQueue) {
-            // 1. ננסה להוציא את המשימה מהתור (O(n))
             if (taskQueue.remove(task)) {
-                // 2. אם היא הייתה בתור, נעדכן את הערך ונוסיף אותה מחדש (O(log n))
                 task.setPriority(newLevel);
                 taskQueue.add(task);
-                // 3. אין צורך ב-notify() כי מספר המשימות לא השתנה, רק הסדר
             } else {
                 /*
-                 * אם המשימה לא נמצאה בתור, זה אומר שהיא כנראה כבר בביצוע.
-                 * לפי דרישות המרצה, משימות בביצוע לא יופסקו.
-                 * לכן רק נעדכן את הערך באובייקט למקרה שהמשתמש בודק אותו.
+                 * If the task is not found in the queue, it is likely already in execution.
+                 * We update the value on the object in case the user queries it.
                  */
                 task.setPriority(newLevel);
             }
         }
     }
 
-    // 4. המחלקה הפנימית בתוך ThreadsPool
+    @Override
+    public String toString() {
+        return "ThreadsPool{" +
+                "taskQueueSize=" + taskQueue.size() +
+                ", numberOfWorkers=" + workers.length +
+                '}';
+    }
+
+    /**
+     * A worker thread that continuously polls and executes tasks from the queue.
+     */
     private class Worker extends Thread {
         @Override
         public void run() {
@@ -65,7 +105,6 @@ public class ThreadsPool {
                         try {
                             taskQueue.wait();
                         } catch (InterruptedException e) {
-                            // אם החוט הופרע, הוא מסיים את הריצה שלו
                             return;
                         }
                     }
@@ -75,9 +114,8 @@ public class ThreadsPool {
                 if (task != null) {
                     try {
                         task.perform();
-                    } catch (Exception e) {
-                        // מונע מהחוט ב-Pool למות אם המשימה נכשלה
-                        System.err.println("Task execution failed: " + e.getMessage());
+                    } catch (RuntimeException e) {
+                        System.err.println("Task execution failed with a runtime exception: " + e.getMessage());
                     }
                 }
             }
